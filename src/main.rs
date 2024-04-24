@@ -468,8 +468,10 @@ impl Screensaver {
                 }
             }
 
-            self.update()?;
-            self.draw()?;
+            if !pause {
+                self.update()?;
+                self.draw()?;
+            }
         }
 
         Ok(())
