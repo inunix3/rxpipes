@@ -20,16 +20,70 @@ use std::{
     time::Duration,
 };
 
-// Index via [DIRECTION OF THE PREVIOUS PART][CURRENT DIRECTION]
-const PIPE_MAP: [[char; 4]; 4] = [
-    // Up
-    ['║', '║', '╔', '╗'],
-    // Down
-    ['║', '║', '╚', '╝'],
-    // Right
-    ['╝', '╗', '═', '═'],
-    // Left
-    ['╚', '╔', '═', '═'],
+/// Map of different piece sets.
+///
+/// Index via [PIPE_SET_IDX][DIRECTION OF THE PREVIOUS PART][CURRENT DIRECTION]
+const PIPE_MAP: [[[char; 4]; 4]; 6] = [
+    [
+        // Up
+        ['#', '#', '#', '#'],
+        // Down
+        ['#', '#', '#', '#'],
+        // Right
+        ['#', '#', '#', '#'],
+        // Left
+        ['#', '#', '#', '#'],
+    ],
+    [
+        // Up
+        ['•', '•', '•', '•'],
+        // Down
+        ['•', '•', '•', '•'],
+        // Right
+        ['•', '•', '•', '•'],
+        // Left
+        ['•', '•', '•', '•'],
+    ],
+    [
+        // Up
+        ['│', '│', '┌', '┐'],
+        // Down
+        ['│', '│', '└', '┘'],
+        // Right
+        ['┘', '┐', '─', '─'],
+        // Left
+        ['└', '┌', '─', '─'],
+    ],
+    [
+        // Up
+        ['│', '│', '╭', '╮'],
+        // Down
+        ['│', '│', '╰', '╯'],
+        // Right
+        ['╯', '╮', '─', '─'],
+        // Left
+        ['╰', '╭', '─', '─'],
+    ],
+    [
+        // Up
+        ['║', '║', '╔', '╗'],
+        // Down
+        ['║', '║', '╚', '╝'],
+        // Right
+        ['╝', '╗', '═', '═'],
+        // Left
+        ['╚', '╔', '═', '═'],
+    ],
+    [
+        // Up
+        ['┃', '┃', '┏', '┓'],
+        // Down
+        ['┃', '┃', '┗', '┛'],
+        // Right
+        ['┛', '┓', '━', '━'],
+        // Left
+        ['┗', '┏', '━', '━'],
+    ],
 ];
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
@@ -284,6 +338,9 @@ struct Config {
     /// The RGB option is for terminals, which support true color, i.e., all 16 million colors.
     #[arg(short, long, default_value_t, value_enum, verbatim_doc_comment)]
     palette: ColorPalette,
+    /// Frames per second
+    #[arg(short = 'P', long, default_value_t = 5, value_parser = 0..=5)]
+    piece_set: i64,
 }
 
 /// Represents the screensaver application
@@ -372,7 +429,9 @@ impl Screensaver {
         let piece = &mut state.pipe_piece;
 
         canv.move_to(piece.pos)?;
-        canv.put_char(PIPE_MAP[piece.prev_dir as usize][piece.dir as usize])?;
+        canv.put_char(
+            PIPE_MAP[cfg.piece_set as usize][piece.prev_dir as usize][piece.dir as usize],
+        )?;
 
         state.drawn_pieces += 1;
 
@@ -397,9 +456,7 @@ impl Screensaver {
             if poll(Duration::from_millis(delay)).wrap_err("cannot poll events")? {
                 match read().wrap_err("cannot read event")? {
                     Event::Key(event) => match event.code {
-                        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
-                            quit = true
-                        }
+                        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => quit = true,
                         KeyCode::Char(' ') => pause = !pause,
                         _ => (),
                     },
@@ -431,7 +488,8 @@ fn main() -> Result<()> {
     let mut app = Screensaver::new(canv, cfg);
     let r = app.run();
 
-    app.deinit().wrap_err("cannot restore the terminal previous state")?;
+    app.deinit()
+        .wrap_err("cannot restore the terminal previous state")?;
 
     r
 }
