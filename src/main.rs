@@ -1,6 +1,6 @@
 // Copyright (c) 2024 inunix3
 //
-// This file is licensed under the MIT License, see LICENSE.md.
+// This file is licensed under the MIT License (see LICENSE.md).
 
 use clap::{Parser, ValueEnum};
 use crossterm::{
@@ -17,22 +17,33 @@ use rand::{
 };
 use std::{
     io::{self, Stdout},
+    panic::{set_hook, take_hook},
     time::Duration,
 };
 
 /// Map of different piece sets.
 ///
-/// Index via [PIPE_SET_IDX][DIRECTION OF THE PREVIOUS PART][CURRENT DIRECTION]
-const PIPE_MAP: [[[char; 4]; 4]; 6] = [
+/// Index via `[PIPE_SET_IDX][DIRECTION OF THE PREVIOUS PIECE][CURRENT DIRECTION]`
+const PIPE_MAP: [[[char; 4]; 4]; 7] = [
     [
         // Up
-        ['#', '#', '#', '#'],
+        ['|', '|', '+', '+'],
         // Down
-        ['#', '#', '#', '#'],
+        ['|', '|', '+', '+'],
         // Right
-        ['#', '#', '#', '#'],
+        ['+', '+', '-', '-'],
         // Left
-        ['#', '#', '#', '#'],
+        ['+', '+', '-', '-'],
+    ],
+    [
+        // Up
+        ['·', '·', '·', '·'],
+        // Down
+        ['·', '·', '·', '·'],
+        // Right
+        ['·', '·', '·', '·'],
+        // Left
+        ['·', '·', '·', '·'],
     ],
     [
         // Up
@@ -86,6 +97,7 @@ const PIPE_MAP: [[[char; 4]; 4]; 6] = [
     ],
 ];
 
+/// Main four (cardinal) directions.
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
 enum Direction {
     #[default]
@@ -106,7 +118,7 @@ impl Distribution<Direction> for Standard {
     }
 }
 
-/// 2D point
+/// 2D point: `(x, y)`.
 #[derive(Copy, Clone, Debug, Default)]
 struct Point {
     x: i16,
@@ -114,7 +126,7 @@ struct Point {
 }
 
 impl Point {
-    /// Move a point one unit in the specified direction
+    /// Move a point one unit in the specified direction.
     fn advance(&mut self, dir: Direction) {
         match dir {
             Direction::Up => self.y -= 1,
@@ -126,7 +138,9 @@ impl Point {
 
     /// Wrap a point within the plane (specified by width and height).
     ///
-    /// E.g. for a plane wide 24 units, the x coord -28 will be wrapped as 20 units.
+    /// E.g. for a plane 24 units wide, the x-coord -28 will be wrapped as 20 units, because if we
+    /// are at the 24th point, then after going 24 units left, we will be at the 24th point again.
+    /// And if we go another 4 units left, we'll end up at the 20th point.
     fn wrap(&mut self, width: i16, height: i16) {
         let wrap_coord = |x: i16, m: i16| -> i16 {
             if x < 0 {
@@ -143,25 +157,26 @@ impl Point {
     }
 }
 
-/// Represents a piece of pipe
+/// Represents a piece of pipe.
 #[derive(Copy, Clone, Default, Debug)]
 struct PipePiece {
-    /// Position of the piece
+    /// Position of the piece.
     pos: Point,
-    /// Direction of the preceeding piece
+    /// Direction of the preceeding piece.
     prev_dir: Direction,
-    /// Direction of the piece
+    /// Direction of the piece.
     dir: Direction,
-    /// Color of the piece
+    /// Color of the piece.
     color: Option<Color>,
 }
 
 impl PipePiece {
+    /// Create a `PipePiece` with position `(0, 0)`, unspecified directions and without a color.
     fn new() -> Self {
         Default::default()
     }
 
-    /// Create a piece with random direction and color
+    /// Create a piece with random direction and color.
     fn gen(palette: ColorPalette) -> Self {
         let mut rng = thread_rng();
         let initial_dir: Direction = rng.gen();
@@ -175,7 +190,7 @@ impl PipePiece {
     }
 }
 
-/// Pick random color from the specified palette
+/// Pick random color from the specified palette.
 fn gen_color(palette: ColorPalette) -> Option<Color> {
     let mut rng = thread_rng();
 
@@ -192,14 +207,14 @@ fn gen_color(palette: ColorPalette) -> Option<Color> {
     }
 }
 
-/// State of the screensaver
+/// State of the screensaver.
 #[derive(Debug)]
 struct State {
-    /// Current pipe piece to be drawn
+    /// Current pipe piece to be drawn.
     pipe_piece: PipePiece,
-    /// Number of pieces not drawn yet
+    /// Number of pieces not drawn yet.
     pieces_remaining: u32,
-    /// Number of currently drawn pieces
+    /// Number of currently drawn pieces.
     drawn_pieces: u32,
 }
 
@@ -214,27 +229,29 @@ impl Default for State {
 }
 
 impl State {
+    /// Create a `State`.
     fn new() -> Self {
         Default::default()
     }
 }
 
-/// Drawing area of the terminal. Wrapper over crossterm
+/// Drawing area of the terminal. Wrapper over crossterm.
 #[derive(Debug)]
 struct Canvas {
-    /// Output destination
+    /// Output destination.
     out: Stdout,
-    /// Size of the canvas (width, height)
+    /// Size of the canvas (width, height).
     size: (u16, u16),
 }
 
 impl Canvas {
+    /// Create a `Canvas` with specified output destination and size.
     fn new(out: Stdout, size: (u16, u16)) -> Self {
         Self { out, size }
     }
 
     /// Clear the terminal screen, hide the cursor and enable raw mode (in this mode the
-    /// terminal passes the input as-is to the program)
+    /// terminal passes the input as-is to the program).
     fn init(&mut self) -> Result<()> {
         self.new_sheet()?;
         execute!(self.out, cursor::Hide).wrap_err("failed to hide the cursor")?;
@@ -242,7 +259,7 @@ impl Canvas {
     }
 
     /// Restore previous state of the terminal; clear the terminal screen, restore the cursor
-    /// and disable raw mode
+    /// and disable raw mode.
     fn deinit(&mut self) -> Result<()> {
         term::disable_raw_mode().wrap_err("failed to disable raw mode")?;
         execute!(self.out, cursor::Show).wrap_err("failed to show up the cursor")?;
@@ -251,39 +268,39 @@ impl Canvas {
         self.remove_sheet()
     }
 
-    /// Make the terminal blank
+    /// Make the terminal blank.
     fn clear(&mut self) -> Result<()> {
         execute!(self.out, term::Clear(term::ClearType::All))
             .wrap_err("failed to clean the terminal")
     }
 
-    /// Move the cursor to the (x, y) point
+    /// Move the cursor to the 2D point.
     fn move_to(&mut self, p: Point) -> Result<()> {
         execute!(self.out, cursor::MoveTo(p.x as u16, p.y as u16))
             .wrap_err("failed to move the cursor")
     }
 
-    /// Set the foreground color (i.e. color of characters)
+    /// Set the foreground color (i.e., color of characters).
     fn set_fg_color(&mut self, c: Color) -> Result<()> {
         execute!(self.out, style::SetForegroundColor(c))
             .wrap_err("failed to set a foreground color")
     }
 
-    /// Print char at current position of the cursor
+    /// Print char at current position of the cursor.
     fn put_char(&mut self, ch: char) -> Result<()> {
         print!("{}", ch);
         Ok(())
     }
 
     /// If the `alternate-screen` feature is enabled, enter the alternate screen. If it's not,
-    /// just clear the terminal screen
+    /// just clear the terminal screen.
     #[cfg(feature = "alternate-screen")]
     fn new_sheet(&mut self) -> Result<()> {
         execute!(self.out, term::EnterAlternateScreen).wrap_err("failed to enter the alt screen")
     }
 
     /// If the `alternate-screen` feature is enabled, leave the alternate screen. If it's not,
-    /// just clear the terminal screen
+    /// just clear the terminal screen.
     #[cfg(feature = "alternate-screen")]
     fn remove_sheet(&mut self) -> Result<()> {
         execute!(self.out, term::LeaveAlternateScreen).wrap_err("failed to leave the alt screen")
@@ -308,42 +325,61 @@ enum ColorPalette {
     Rgb,
 }
 
-/// Screensaver settings and CLI parser
+/// Screensaver settings and CLI parser.
 #[derive(Debug, Parser)]
 #[command(
-    about = "2D version of the famous pipes screensaver for terminals!",
+    about = "2D version of the ancient pipes screensaver for terminals.",
     author = "inunix3",
     version = "1.0",
     long_about = None,
 )]
 struct Config {
-    /// Frames per second
-    #[arg(short, long, default_value_t = 20)]
-    fps: u8,
-    /// Maximum drawn pieces of pipes on the screen
+    /// Frames per second.
+    #[arg(short, long, value_parser = 1.., default_value_t = 20)]
+    fps: i64,
+    /// Maximum drawn pieces of pipes on the screen.
     /// When this maximum is reached, the screen will be cleared.
+    /// Set it to 0 to remove the limit.
     #[arg(short, long, default_value_t = 1000, verbatim_doc_comment)]
     max_drawn_pieces: u32,
-    /// Maximum length of pipe in pieces
-    #[arg(long, default_value_t = 300)]
+    /// Maximum length of pipe in pieces.
+    /// Must not equal to --min-pipe-length.
+    #[arg(long, default_value_t = 300, verbatim_doc_comment)]
     max_pipe_length: u32,
-    /// Minimal length of pipe in pieces
-    #[arg(long, default_value_t = 7)]
+    /// Minimal length of pipe in pieces.
+    /// Must not equal to --max-pipe-length.
+    #[arg(long, default_value_t = 7, verbatim_doc_comment)]
     min_pipe_length: u32,
-    /// Probability of turning a pipe as a percentage in a decimal form
+    /// Probability of turning a pipe as a percentage in a decimal form.
     #[arg(short = 't', long, default_value_t = 0.2)]
     turning_prob: f64,
-    /// Set of colors used for coloring each pipe
+    /// Set of colors used for coloring each pipe.
     /// `None` disables this feature. Base colors are 16 predefined colors by the terminal.
     /// The RGB option is for terminals, which support true color, i.e., all 16 million colors.
     #[arg(short, long, default_value_t, value_enum, verbatim_doc_comment)]
     palette: ColorPalette,
-    /// Frames per second
-    #[arg(short = 'P', long, default_value_t = 5, value_parser = 0..=5)]
+    /// A set of pieces to use.
+    /// Available piece sets:
+    /// 0 - ASCII pipes:
+    ///     |- ++ ++  +- -+ -|-
+    /// 1 - thin dots:
+    ///     ·· ·· ··  ·· ·· ···
+    /// 2 - bold dots:
+    ///     •• •• ••  •• •• •••
+    /// 3 - thin pipes:
+    ///     │─ ┐└ ┘┌  └─ ─┐ ─│─
+    /// 4 - thin pipes with rounded corners:
+    ///     │─ ╮╰ ╯╭  ╰─ ─╮ ─│─
+    /// 5 - double pipes:
+    ///     ║═ ╗╚ ╝╔  ╚═ ═╗ ═║═
+    /// 6 - bold pipes (default):
+    ///     ┃━ ┓┗ ┛┏  ┗━ ━┓ ━┃━
+    /// This parameter expects a numeric ID.
+    #[arg(short = 'P', long, default_value_t = 5, value_parser = 0..=6, verbatim_doc_comment)]
     piece_set: i64,
 }
 
-/// Represents the screensaver application
+/// Represents the screensaver application.
 #[derive(Debug)]
 struct Screensaver {
     state: State,
@@ -352,6 +388,7 @@ struct Screensaver {
 }
 
 impl Screensaver {
+    /// Create a `Screensaver`.
     fn new(canv: Canvas, cfg: Config) -> Self {
         Self {
             state: State::new(),
@@ -360,12 +397,12 @@ impl Screensaver {
         }
     }
 
-    /// Free all resources
+    /// Free all resources.
     fn deinit(&mut self) -> Result<()> {
         self.canv.deinit()
     }
 
-    /// Process a new frame
+    /// Process a new frame.
     fn update(&mut self) -> Result<()> {
         // Aliases with shorter names
         let state = &mut self.state;
@@ -420,7 +457,7 @@ impl Screensaver {
         Ok(())
     }
 
-    /// Display the current state
+    /// Display the current state.
     fn draw(&mut self) -> Result<()> {
         // Aliases with shorter names
         let state = &mut self.state;
@@ -445,16 +482,25 @@ impl Screensaver {
         Ok(())
     }
 
+    /// Run a main loop in the current thread until an external event is received (a key press or
+    /// signal) or some internal error is occurred.
     fn run(&mut self) -> Result<()> {
-        let delay = 1000 / self.cfg.fps as u64;
+        let delay = Duration::from_millis(1000 / self.cfg.fps as u64);
 
         let mut quit = false;
         let mut pause = false;
 
         while !quit {
-            // Handle incoming events
-            if poll(Duration::from_millis(delay)).wrap_err("cannot poll events")? {
-                match read().wrap_err("cannot read event")? {
+            // Handle incoming events.
+            //
+            // The poll function blocks the thread if the argument is nonzero, so we can use it
+            // for a frame rate limit. The only downside is that if the incoming events are
+            // received (e.g., a key press or window resize), this function immediately returns,
+            // so the delay isn't always the same. But since the user isn't expected to make
+            // thousands of key presses or crazily drag the corner of the window while using
+            // screensaver, we can ignore this.
+            if poll(delay).wrap_err("cannot poll events")? {
+                match read().wrap_err("cannot read received external event")? {
                     Event::Key(event) => match event.code {
                         KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => quit = true,
                         KeyCode::Char(' ') => pause = !pause,
@@ -478,6 +524,19 @@ impl Screensaver {
     }
 }
 
+/// Set a panic hook that will restore the terminal state when the program panics.
+fn set_panic_hook() {
+    let old_hook = take_hook();
+
+    set_hook(Box::new(move |panic_info| {
+        let mut c = Canvas::new(io::stdout(), (0, 0));
+        let _ = c.deinit();
+
+        old_hook(panic_info);
+    }));
+}
+
+/// An entry point.
 fn main() -> Result<()> {
     let cfg = Config::parse();
 
@@ -485,13 +544,17 @@ fn main() -> Result<()> {
         io::stdout(),
         term::size().wrap_err("failed to query the size of the terminal")?,
     );
-    canv.init().wrap_err("cannot initialize screensaver")?;
+
+    set_panic_hook();
+
+    canv.init()
+        .wrap_err("failed to prepare terminal for drawing")?;
 
     let mut app = Screensaver::new(canv, cfg);
     let r = app.run();
 
     app.deinit()
-        .wrap_err("cannot restore the terminal previous state")?;
+        .wrap_err("failed to restore the terminal previous state")?;
 
     r
 }
