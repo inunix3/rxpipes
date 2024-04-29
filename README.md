@@ -38,10 +38,10 @@ You can select a set by passing `-P <ID>` to rxpipes.
 
 | ID | Description                     | Image                             |
 |----|---------------------------------|-----------------------------------|
-| 0  | ASCII pipes                     | ![](screenshots/screenshot_0.png) |
-| 1  | Thin dots                       | ![](screenshots/screenshot_1.png) |
-| 2  | Bold dots                       | ![](screenshots/screenshot_2.png) |
-| 3  | Thin pipes                      | ![](screenshots/screenshot_3.png) |
-| 4  | Thin pipes with rounded corners | ![](screenshots/screenshot_4.png) |
-| 5  | Double pipes                    | ![](screenshots/screenshot_5.png) |
-| 6  | Bold pipes                      | ![](screenshots/screenshot_6.png) |
+| 0  | ASCII pipes                     | ![](screenshots/screenshot_p0.png) |
+| 1  | Thin dots                       | ![](screenshots/screenshot_p1.png) |
+| 2  | Bold dots                       | ![](screenshots/screenshot_p2.png) |
+| 3  | Thin pipes                      | ![](screenshots/screenshot_p3.png) |
+| 4  | Thin pipes with rounded corners | ![](screenshots/screenshot_p4.png) |
+| 5  | Double pipes                    | ![](screenshots/screenshot_p5.png) |
+| 6  | Bold pipes                      | ![](screenshots/screenshot_p6.png) |
