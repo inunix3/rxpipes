@@ -1,9 +1,6 @@
 # rxpipes
 This program is a 2D screensaver which recreates the Pipes screensaver from old MS Windows versions.
 
-![First screenshot of the screensaver](screenshots/screenshot_1.png)
-![Second screenshot of the screensaver](screenshots/screenshot_2.png)
-
 ## Features
 - Multiple sets of pieces (see the [Piece Sets](#piece-sets) section to see them)
 - Each pipe has its own color, the available palettes are: none (colorless), base colors and RGB.
@@ -14,17 +11,23 @@ This program is a 2D screensaver which recreates the Pipes screensaver from old 
 Specifying 0 will make this program to draw straight pipes and 1 will make your screen look like...
 umm... pseudo dragon curve or something like that?
 
+## Screenshots
+
+![First screenshot of the screensaver](screenshots/screenshot_1.png)
+![Second screenshot of the screensaver](screenshots/screenshot_2.png)
+
+
 ## Installation
-You'll need the Rust toolchain ([rustup](https://rustup.rs/) or from system package repo)
-and make sure that it's up to date.
+You'll need the Rust toolchain ([rustup](https://rustup.rs/) or from system package repo) and make
+sure it's up to date.
 
-Once you have the toolchain prepared, type `cargo install rxpipes`. If the process went well, you
-can now run the rxpipes simply by typing `rxpipes`. If the shell says that the command does not
-exists, then make sure that `$HOME/.cargo/bin` (or whatever the default cargo dir will be) is in the
-`PATH` environment variable.
+When the toolchain will be prepared, type `cargo install rxpipes`.
 
-## Running
-Just type `rxpipes`.
+If you have installed successfully rxpipes, you can now run the it simply by typing `rxpipes`. If
+the shell says that the command does not exists, make sure that `$HOME/.cargo/bin` (or whatever the
+default cargo dir will be) is in the `PATH` environment variable.
+
+To see all available options, pass `-h` or `--help`.
 
 ## Controls
 | Key                  | Action |
@@ -45,3 +48,10 @@ You can select a set by passing `-P <ID>` to rxpipes.
 | 4  | Thin pipes with rounded corners | ![](screenshots/screenshot_p4.png) |
 | 5  | Double pipes                    | ![](screenshots/screenshot_p5.png) |
 | 6  | Bold pipes                      | ![](screenshots/screenshot_p6.png) |
+
+## Contribution
+If you have found a problem or have a suggestion, feel free to open an issue or send a pull request.
+I'd appreciate it.
+
+## License
+The rxpipes project is licensed under the [MIT license](LICENSE.md).
