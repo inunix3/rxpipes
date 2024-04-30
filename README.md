@@ -49,6 +49,8 @@ You can select a set by passing `-P <ID>` to rxpipes.
 | 5  | Double pipes                    | ![](screenshots/screenshot_p5.png) |
 | 6  | Bold pipes                      | ![](screenshots/screenshot_p6.png) |
 
+*The look of the selected set may differ from the screenshots as it depends on the font that you use.*
+
 ## Contribution
 If you have found a problem or have a suggestion, feel free to open an issue or send a pull request.
 I'd appreciate it.
