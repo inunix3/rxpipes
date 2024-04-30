@@ -13,9 +13,10 @@ umm... pseudo dragon curve or something like that?
 
 ## Screenshots
 
-![First screenshot of the screensaver](screenshots/screenshot_1.png)
-![Second screenshot of the screensaver](screenshots/screenshot_2.png)
-
+<p align="center">
+  <img src="screenshots/screenshot_1.png" alt="First screenshot with doubled pipes" width="500">
+  <img src="screenshots/screenshot_2.png" alt="Second screenshot with bold pipes" width="500">
+</p>
 
 ## Installation
 You'll need the Rust toolchain ([rustup](https://rustup.rs/) or from system package repo) and make
