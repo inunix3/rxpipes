@@ -207,34 +207,6 @@ fn gen_color(palette: ColorPalette) -> Option<Color> {
     }
 }
 
-/// State of the screensaver.
-#[derive(Debug)]
-struct State {
-    /// Current pipe piece to be drawn.
-    pipe_piece: PipePiece,
-    /// Number of pieces not drawn yet.
-    pieces_remaining: u32,
-    /// Number of currently drawn pieces.
-    drawn_pieces: u32,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            pipe_piece: PipePiece::new(),
-            pieces_remaining: 0,
-            drawn_pieces: 0,
-        }
-    }
-}
-
-impl State {
-    /// Create a `State`.
-    fn new() -> Self {
-        Default::default()
-    }
-}
-
 /// Drawing area of the terminal. Wrapper over crossterm.
 #[derive(Debug)]
 struct Canvas {
@@ -343,19 +315,19 @@ struct Config {
     #[arg(short, long, default_value_t = 1000, verbatim_doc_comment)]
     max_drawn_pieces: u32,
     /// Maximum length of pipe in pieces.
-    /// Must not equal to --min-pipe-length.
+    /// Must not equal to or be less than --min-pipe-length.
     #[arg(long, default_value_t = 300, verbatim_doc_comment)]
     max_pipe_length: u32,
     /// Minimal length of pipe in pieces.
-    /// Must not equal to --max-pipe-length.
+    /// Must not equal to or be greater than --max-pipe-length.
     #[arg(long, default_value_t = 7, verbatim_doc_comment)]
     min_pipe_length: u32,
     /// Probability of turning a pipe as a percentage in a decimal form.
     #[arg(short = 't', long, default_value_t = 0.2)]
     turning_prob: f64,
     /// Set of colors used for coloring each pipe.
-    /// `None` disables this feature. Base colors are 16 predefined colors by the terminal.
-    /// The RGB option is for terminals, which support true color, i.e., all 16 million colors.
+    /// `None` disables this feature. Base colors are 16 colors predefined by the terminal.
+    /// The RGB option is for terminals with true color support (all 16 million colors).
     #[arg(short, long, default_value_t, value_enum, verbatim_doc_comment)]
     palette: ColorPalette,
     /// A set of pieces to use.
@@ -375,8 +347,36 @@ struct Config {
     /// 6 - bold pipes (default):
     ///     ┃━ ┓┗ ┛┏  ┗━ ━┓ ━┃━
     /// This parameter expects a numeric ID.
-    #[arg(short = 'P', long, default_value_t = 5, value_parser = 0..=6, verbatim_doc_comment)]
+    #[arg(short = 'P', long, default_value_t = 6, value_parser = 0..=6, verbatim_doc_comment)]
     piece_set: i64,
+}
+
+/// State of the screensaver.
+#[derive(Debug)]
+struct State {
+    /// Current pipe piece to be drawn.
+    pipe_piece: PipePiece,
+    /// Number of pieces not drawn yet.
+    pieces_remaining: u32,
+    /// Number of currently drawn pieces.
+    drawn_pieces: u32,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            pipe_piece: PipePiece::new(),
+            pieces_remaining: 0,
+            drawn_pieces: 0,
+        }
+    }
+}
+
+impl State {
+    /// Create a `State`.
+    fn new() -> Self {
+        Default::default()
+    }
 }
 
 /// Represents the screensaver application.
