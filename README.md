@@ -2,14 +2,16 @@
 This program is a 2D screensaver which recreates the Pipes screensaver from old MS Windows versions.
 
 ## Features
-- Multiple sets of pieces (see the [Piece Sets](#piece-sets) section to see them)
-- Each pipe has its own color, the available palettes are: none (colorless), base colors and RGB.
-- Change the speed of drawing (FPS).
-- The minimal and maximal length of pipes can be specified
-- The maximal number of drawn characters can be also specified. To ignore this setting you can specify 0 via CLI.
-- The probability of turning pipes is changeable, it's given as a percentage in decimal form.
-Specifying 0 will make this program to draw straight pipes and 1 will make your screen look like...
-umm... pseudo dragon curve or something like that?
+- 6 available piece sets (see the [Piece Sets](#piece-sets) section to see them).
+- Each pipe has its own color; available palettes are: none (colorless), base colors (16 colors
+defined by your terminal) and RGB.
+- Changeable FPS (frames per second).
+- The minimal and maximal length of pipes can be specified.
+- The maximal number of drawn characters can be also specified. To ignore this setting specify 0
+via CLI. The screen will be cleared when this number is reached.
+- The probability of turning pipes is changeable, it's given as a percentage in decimal form (0 .. 1).
+- It enters an alternate screen so it won't mess up your previous output (if your terminal does not
+support alternate screen, see [Installation](#installation)).
 
 ## Screenshots
 
@@ -22,7 +24,9 @@ umm... pseudo dragon curve or something like that?
 You'll need the Rust toolchain ([rustup](https://rustup.rs/) or from system package repo) and make
 sure it's up to date.
 
-When the toolchain will be prepared, type `cargo install rxpipes`.
+When the toolchain will be prepared, type `cargo install rxpipes`. If you want to disable the
+alternate screen feature, add `--no-default-features` (currently, cargo does not support disabling
+of individual features).
 
 If you have installed successfully rxpipes, you can now run the it simply by typing `rxpipes`. If
 the shell says that the command does not exists, make sure that `$HOME/.cargo/bin` (or whatever the
@@ -31,10 +35,11 @@ default cargo dir will be) is in the `PATH` environment variable.
 To see all available options, pass `-h` or `--help`.
 
 ## Controls
-| Key                  | Action |
-|----------------------|--------|
-| `q` / `Q` / `Escape` | Quit   |
-| `Space`              | Pause  |
+| Key                  | Action       |
+|----------------------|--------------|
+| `q` / `Q` / `Escape` | Quit         |
+| `Space`              | Pause        |
+| `c`                  | Clear screen |
 
 ## Piece Sets
 
@@ -48,7 +53,7 @@ You can select a set by passing `-P <ID>` to rxpipes.
 | 3  | Thin pipes                      | ![](screenshots/screenshot_p3.png) |
 | 4  | Thin pipes with rounded corners | ![](screenshots/screenshot_p4.png) |
 | 5  | Double pipes                    | ![](screenshots/screenshot_p5.png) |
-| 6  | Bold pipes                      | ![](screenshots/screenshot_p6.png) |
+| 6  | Bold pipes (default)            | ![](screenshots/screenshot_p6.png) |
 
 *The look of the selected set may differ from the screenshots as it depends on the font that you use.*
 
