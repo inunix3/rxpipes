@@ -504,6 +504,7 @@ impl Screensaver {
                     Event::Key(event) => match event.code {
                         KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => quit = true,
                         KeyCode::Char(' ') => pause = !pause,
+                        KeyCode::Char('c') => self.canv.clear()?,
                         _ => (),
                     },
                     Event::Resize(w, h) => {
