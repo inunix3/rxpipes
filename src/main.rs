@@ -20,81 +20,31 @@ use std::{
     panic::{set_hook, take_hook},
     time::Duration,
 };
+use unicode_segmentation::UnicodeSegmentation;
 
-/// Map of different piece sets.
+/// Map of default piece sets.
+const DEFAULT_PIECE_SETS: [[char; 6]; 7] = [
+    ['|', '-', '+', '+', '+', '+'],
+    ['·', '·', '·', '·', '·', '·'],
+    ['•', '•', '•', '•', '•', '•'],
+    ['│', '─', '┌', '┐', '└', '┘'],
+    ['│', '─', '╭', '╮', '╰', '╯'],
+    ['║', '═', '╔', '╗', '╚', '╝'],
+    ['┃', '━', '┏', '┓', '┗', '┛'], // default
+];
+
+/// Map from directions to indices for indexing default piece sets.
 ///
-/// Index via `[PIPE_SET_IDX][DIRECTION OF THE PREVIOUS PIECE][CURRENT DIRECTION]`
-const PIPE_MAP: [[[char; 4]; 4]; 7] = [
-    [
-        // Up
-        ['|', '|', '+', '+'],
-        // Down
-        ['|', '|', '+', '+'],
-        // Right
-        ['+', '+', '-', '-'],
-        // Left
-        ['+', '+', '-', '-'],
-    ],
-    [
-        // Up
-        ['·', '·', '·', '·'],
-        // Down
-        ['·', '·', '·', '·'],
-        // Right
-        ['·', '·', '·', '·'],
-        // Left
-        ['·', '·', '·', '·'],
-    ],
-    [
-        // Up
-        ['•', '•', '•', '•'],
-        // Down
-        ['•', '•', '•', '•'],
-        // Right
-        ['•', '•', '•', '•'],
-        // Left
-        ['•', '•', '•', '•'],
-    ],
-    [
-        // Up
-        ['│', '│', '┌', '┐'],
-        // Down
-        ['│', '│', '└', '┘'],
-        // Right
-        ['┘', '┐', '─', '─'],
-        // Left
-        ['└', '┌', '─', '─'],
-    ],
-    [
-        // Up
-        ['│', '│', '╭', '╮'],
-        // Down
-        ['│', '│', '╰', '╯'],
-        // Right
-        ['╯', '╮', '─', '─'],
-        // Left
-        ['╰', '╭', '─', '─'],
-    ],
-    [
-        // Up
-        ['║', '║', '╔', '╗'],
-        // Down
-        ['║', '║', '╚', '╝'],
-        // Right
-        ['╝', '╗', '═', '═'],
-        // Left
-        ['╚', '╔', '═', '═'],
-    ],
-    [
-        // Up
-        ['┃', '┃', '┏', '┓'],
-        // Down
-        ['┃', '┃', '┗', '┛'],
-        // Right
-        ['┛', '┓', '━', '━'],
-        // Left
-        ['┗', '┏', '━', '━'],
-    ],
+/// Index via `[DIRECTION OF THE PREVIOUS PIECE][CURRENT DIRECTION]`
+const PIECE_SETS_IDX_MAP: [[usize; 4]; 4] = [
+    // Up
+    [0, 0, 2, 3],
+    // Down
+    [0, 0, 4, 5],
+    // Right
+    [5, 3, 1, 1],
+    // Left
+    [4, 2, 1, 1],
 ];
 
 /// Main four (cardinal) directions.
@@ -258,9 +208,9 @@ impl Canvas {
             .wrap_err("failed to set a foreground color")
     }
 
-    /// Print char at current position of the cursor.
-    fn put_char(&mut self, ch: char) -> Result<()> {
-        print!("{}", ch);
+    /// Print string at the current position of the cursor.
+    fn put_str(&mut self, s: impl AsRef<str>) -> Result<()> {
+        print!("{}", s.as_ref());
         Ok(())
     }
 
@@ -330,7 +280,7 @@ struct Config {
     /// The RGB option is for terminals with true color support (all 16 million colors).
     #[arg(short, long, default_value_t, value_enum, verbatim_doc_comment)]
     palette: ColorPalette,
-    /// A set of pieces to use.
+    /// A default set of pieces to use.
     /// Available piece sets:
     /// 0 - ASCII pipes:
     ///     |- ++ ++  +- -+ -|-
@@ -349,6 +299,16 @@ struct Config {
     /// This parameter expects a numeric ID.
     #[arg(short = 'P', long, default_value_t = 6, value_parser = 0..=6, verbatim_doc_comment)]
     piece_set: i64,
+    /// A string representing custom piece set (takes precedence over -P/--piece-set).
+    /// The string must have length of 6 characters. Write it according to `│─┌┐└┘`.
+    /// This string must define all 6 pieces, otherwise rxpipes will crash.
+    /// Unicode grapheme clusters are supported and treated as single characters.
+    #[arg(name = "custom-piece-set", short = 'c', long, verbatim_doc_comment)]
+    custom_piece_set_: Option<String>,
+
+    // TODO: implement validation of length for custom-piece-set.
+    #[clap(skip)]
+    custom_piece_set: Option<Vec<String>>,
 }
 
 /// State of the screensaver.
@@ -466,9 +426,17 @@ impl Screensaver {
         let piece = &mut state.pipe_piece;
 
         canv.move_to(piece.pos)?;
-        canv.put_char(
-            PIPE_MAP[cfg.piece_set as usize][piece.prev_dir as usize][piece.dir as usize],
-        )?;
+
+        let piece_idx = PIECE_SETS_IDX_MAP[piece.prev_dir as usize][piece.dir as usize];
+
+        if let Some(pieces) = &cfg.custom_piece_set {
+            canv.put_str(&pieces[piece_idx])?;
+        } else {
+            canv.put_str(format!(
+                "{}",
+                DEFAULT_PIECE_SETS[cfg.piece_set as usize][piece_idx]
+            ))?;
+        }
 
         state.drawn_pieces += 1;
 
@@ -537,9 +505,23 @@ fn set_panic_hook() {
     }));
 }
 
+fn parse_cli() -> Config {
+    let mut cfg = Config::parse();
+
+    if let Some(s) = &cfg.custom_piece_set_ {
+        cfg.custom_piece_set = Some(
+            s.graphemes(true) // true here means iterate over extended grapheme clusters (UAX #29).
+                .map(|s| s.to_string())
+                .collect(),
+        );
+    }
+
+    cfg
+}
+
 /// An entry point.
 fn main() -> Result<()> {
-    let cfg = Config::parse();
+    let cfg = parse_cli();
 
     let mut canv = Canvas::new(
         io::stdout(),
