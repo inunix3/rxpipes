@@ -17,6 +17,7 @@ clap = { version = "4.5.4", features = ["derive"] }
 crossterm = "0.27.0"
 eyre = "0.6.12"
 rand = "0.8.5"
+unicode-segmentation = "1.11.0"
 
 [features]
 default = ["alternate-screen"]
