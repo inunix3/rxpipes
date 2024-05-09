@@ -3,6 +3,7 @@ This program is a 2D screensaver which recreates the Pipes screensaver from old 
 
 ## Features
 - 6 available piece sets (see the [Piece Sets](#piece-sets) section to see them).
+- Custom piece sets are supported.
 - Each pipe has its own color; available palettes are: none (colorless), base colors (16 colors
 defined by your terminal) and RGB.
 - Changeable FPS (frames per second).
@@ -56,6 +57,8 @@ You can select a set by passing `-P <ID>` to rxpipes.
 | 6  | Bold pipes (default)            | ![](screenshots/screenshot_p6.png) |
 
 *The look of the selected set may differ from the screenshots as it depends on the font that you use.*
+
+To set your own piece set see the `-c`/`--custom-piece-set` flag in the help message (`-h`).
 
 ## Contribution
 If you have found a problem or have a suggestion, feel free to open an issue or send a pull request.
