@@ -527,6 +527,10 @@ impl Screensaver {
                         KeyCode::Char('c') => self.canv.clear(),
                         _ => {}
                     },
+                    InputEvent::Key(KeyEvent {
+                        key: KeyCode::Char('c'),
+                        modifiers: Modifiers::CTRL,
+                    }) => quit = true,
                     InputEvent::Resized { cols, rows } => {
                         self.canv.size = (cols, rows);
                         self.canv.clear();
