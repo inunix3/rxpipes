@@ -304,7 +304,7 @@ enum ColorPalette {
 )]
 struct Config {
     /// Frames per second.
-    #[arg(short, long, value_parser = 1.., default_value_t = 20)]
+    #[arg(short, long, value_parser = 1.., default_value_t = 24)]
     fps: i64,
     /// Maximum drawn pieces of pipes on the screen.
     /// When this maximum is reached, the screen will be cleared.
