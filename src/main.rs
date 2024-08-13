@@ -3,22 +3,22 @@
 // This file is licensed under the MIT License (see LICENSE.md).
 
 use clap::{Parser, ValueEnum};
-use crossterm::{
-    cursor,
-    event::{poll, read, Event, KeyCode},
-    execute,
-    style::{self, Color},
-    terminal as term,
-};
 use eyre::{Result, WrapErr};
 use rand::{
     distributions::{Distribution, Standard},
     thread_rng, Rng,
 };
 use std::{
-    io::{self, Stdout},
     panic::{set_hook, take_hook},
     time::Duration,
+};
+use termwiz::{
+    caps::Capabilities,
+    cell::AttributeChange,
+    color::{ColorAttribute, SrgbaTuple},
+    input::{InputEvent, KeyCode, KeyEvent, Modifiers},
+    surface::{Change, CursorVisibility, Position},
+    terminal::{buffered::BufferedTerminal, SystemTerminal, Terminal},
 };
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -71,8 +71,8 @@ impl Distribution<Direction> for Standard {
 /// 2D point: `(x, y)`.
 #[derive(Copy, Clone, Debug, Default)]
 struct Point {
-    x: i16,
-    y: i16,
+    x: isize,
+    y: isize,
 }
 
 impl Point {
@@ -91,8 +91,8 @@ impl Point {
     /// E.g. for a plane 24 units wide, the x-coord -28 will be wrapped as 20 units, because if we
     /// are at the 24th point, then after going 24 units left, we will be at the 24th point again.
     /// And if we go another 4 units left, we'll end up at the 20th point.
-    fn wrap(&mut self, width: i16, height: i16) {
-        let wrap_coord = |x: i16, m: i16| -> i16 {
+    fn wrap(&mut self, width: isize, height: isize) {
+        let wrap_coord = |x: isize, m: isize| -> isize {
             if x < 0 {
                 m - x.abs() % m
             } else if x >= m {
@@ -117,7 +117,7 @@ struct PipePiece {
     /// Direction of the piece.
     dir: Direction,
     /// Color of the piece.
-    color: Option<Color>,
+    color: Option<ColorAttribute>,
 }
 
 impl PipePiece {
@@ -141,101 +141,148 @@ impl PipePiece {
 }
 
 /// Pick random color from the specified palette.
-fn gen_color(palette: ColorPalette) -> Option<Color> {
+fn gen_color(palette: ColorPalette) -> Option<ColorAttribute> {
     let mut rng = thread_rng();
 
     match palette {
         ColorPalette::None => None,
-        ColorPalette::BaseColors => {
-            Color::parse_ansi(format!("5;{}", rng.gen_range(0..16)).as_str())
-        }
-        ColorPalette::Rgb => Some(Color::Rgb {
-            r: rng.gen(),
-            g: rng.gen(),
-            b: rng.gen(),
-        }),
+        ColorPalette::BaseColors => Some(ColorAttribute::PaletteIndex(rng.gen_range(0..16))),
+        ColorPalette::Rgb => Some(ColorAttribute::TrueColorWithDefaultFallback(SrgbaTuple(
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            1.0,
+        ))),
     }
 }
 
-/// Drawing area of the terminal. Wrapper over crossterm.
-#[derive(Debug)]
+/// Drawing area of the terminal.
 struct Canvas {
-    /// Output destination.
-    out: Stdout,
+    /// Associated terminal.
+    term: BufferedTerminal<SystemTerminal>,
     /// Size of the canvas (width, height).
-    size: (u16, u16),
+    size: (usize, usize),
 }
 
 impl Canvas {
-    /// Create a `Canvas` with specified output destination and size.
-    fn new(out: Stdout, size: (u16, u16)) -> Self {
-        Self { out, size }
+    /// Create a `Canvas` with specified destination terminal (whole screen area is covered).
+    fn new(term: SystemTerminal) -> Result<Canvas> {
+        let mut term = BufferedTerminal::new(term)?;
+        let size = term
+            .terminal()
+            .get_screen_size()
+            .wrap_err("failed to query the size of the terminal")
+            .map(|s| (s.cols, s.rows))?;
+
+        Ok(Self { term, size })
     }
 
     /// Clear the terminal screen, hide the cursor and enable raw mode (in this mode the
     /// terminal passes the input as-is to the program).
     fn init(&mut self) -> Result<()> {
+        // When Terminal is dropped, it automatically exists the alternate screen.
         self.new_sheet()?;
-        execute!(self.out, cursor::Hide).wrap_err("failed to hide the cursor")?;
-        term::enable_raw_mode().wrap_err("failed to enable raw mode")
+        self.term
+            .terminal()
+            .set_raw_mode()
+            .wrap_err("failed to set raw mode")?;
+        self.term
+            .add_change(Change::CursorVisibility(CursorVisibility::Hidden));
+
+        Ok(())
     }
 
     /// Restore previous state of the terminal; clear the terminal screen, restore the cursor
     /// and disable raw mode.
     fn deinit(&mut self) -> Result<()> {
-        term::disable_raw_mode().wrap_err("failed to disable raw mode")?;
-        execute!(self.out, cursor::Show).wrap_err("failed to show up the cursor")?;
-        self.set_fg_color(Color::Reset)?;
-        self.move_to(Point { x: 0, y: 0 })?;
-        self.remove_sheet()
+        self.term
+            .add_change(Change::CursorVisibility(CursorVisibility::Visible));
+        self.set_fg_color(ColorAttribute::Default);
+        self.move_to(Point { x: 0, y: 0 });
+        self.term
+            .terminal()
+            .set_cooked_mode()
+            .wrap_err("failed to unset raw mode")?;
+        self.remove_sheet()?;
+
+        Ok(())
+    }
+
+    /// Show all changes since the last render.
+    fn render(&mut self) -> Result<()> {
+        self.term
+            .flush()
+            .wrap_err("failed to flush screen buffer")?;
+
+        Ok(())
     }
 
     /// Make the terminal blank.
-    fn clear(&mut self) -> Result<()> {
-        execute!(self.out, term::Clear(term::ClearType::All))
-            .wrap_err("failed to clean the terminal")
+    fn clear(&mut self) {
+        self.term
+            .add_change(Change::ClearScreen(ColorAttribute::Default));
     }
 
     /// Move the cursor to the 2D point.
-    fn move_to(&mut self, p: Point) -> Result<()> {
-        execute!(self.out, cursor::MoveTo(p.x as u16, p.y as u16))
-            .wrap_err("failed to move the cursor")
+    fn move_to(&mut self, p: Point) {
+        self.term.add_change(Change::CursorPosition {
+            x: Position::Absolute(p.x as usize),
+            y: Position::Absolute(p.y as usize),
+        });
     }
 
     /// Set the foreground color (i.e., color of characters).
-    fn set_fg_color(&mut self, c: Color) -> Result<()> {
-        execute!(self.out, style::SetForegroundColor(c))
-            .wrap_err("failed to set a foreground color")
+    fn set_fg_color(&mut self, c: ColorAttribute) {
+        self.term
+            .add_change(Change::Attribute(AttributeChange::Foreground(c)));
     }
 
     /// Print string at the current position of the cursor.
-    fn put_str(&mut self, s: impl AsRef<str>) -> Result<()> {
-        print!("{}", s.as_ref());
-        Ok(())
+    fn put_str(&mut self, s: impl AsRef<str>) {
+        self.term.add_change(Change::Text(String::from(s.as_ref())));
     }
 
     /// If the `alternate-screen` feature is enabled, enter the alternate screen. If it's not,
     /// just clear the terminal screen.
     #[cfg(feature = "alternate-screen")]
     fn new_sheet(&mut self) -> Result<()> {
-        execute!(self.out, term::EnterAlternateScreen).wrap_err("failed to enter the alt screen")
+        self.term
+            .terminal()
+            .enter_alternate_screen()
+            .wrap_err("failed to enter alternate screen")?;
+
+        Ok(())
     }
 
     /// If the `alternate-screen` feature is enabled, leave the alternate screen. If it's not,
     /// just clear the terminal screen.
     #[cfg(feature = "alternate-screen")]
     fn remove_sheet(&mut self) -> Result<()> {
-        execute!(self.out, term::LeaveAlternateScreen).wrap_err("failed to leave the alt screen")
+        self.term
+            .terminal()
+            .exit_alternate_screen()
+            .wrap_err("failed to leave alternate screen")?;
+
+        Ok(())
     }
 
     #[cfg(not(feature = "alternate-screen"))]
     fn new_sheet(&mut self) -> Result<()> {
-        self.clear()
+        self.clear();
+
+        Ok(())
     }
 
     #[cfg(not(feature = "alternate-screen"))]
     fn remove_sheet(&mut self) -> Result<()> {
-        self.clear()
+        self.clear();
+
+        Ok(())
+    }
+
+    /// Retrieve a mutable reference to the associated terminal.
+    fn terminal(&mut self) -> &mut BufferedTerminal<SystemTerminal> {
+        &mut self.term
     }
 }
 
@@ -340,7 +387,6 @@ impl State {
 }
 
 /// Represents the screensaver application.
-#[derive(Debug)]
 struct Screensaver {
     state: State,
     canv: Canvas,
@@ -363,7 +409,7 @@ impl Screensaver {
     }
 
     /// Process a new frame.
-    fn update(&mut self) -> Result<()> {
+    fn update(&mut self) {
         // Aliases with shorter names
         let state = &mut self.state;
         let canv = &mut self.canv;
@@ -377,20 +423,16 @@ impl Screensaver {
 
             *piece = PipePiece::gen(cfg.palette);
             piece.pos = Point {
-                x: rng.gen_range(0..canv.size.0) as i16,
-                y: rng.gen_range(0..canv.size.1) as i16,
+                x: rng.gen_range(0..canv.size.0) as isize,
+                y: rng.gen_range(0..canv.size.1) as isize,
             };
-
-            if let Some(color) = piece.color {
-                canv.set_fg_color(color)?;
-            }
         }
 
         piece.pos.advance(piece.dir);
-        piece.pos.wrap(canv.size.0 as i16, canv.size.1 as i16);
+        piece.pos.wrap(canv.size.0 as isize, canv.size.1 as isize);
         piece.prev_dir = piece.dir;
 
-        // Try to turn the pipe to other direction
+        // Try to turn the pipe in other direction
         if rng.gen_bool(cfg.turning_prob) {
             let choice = rng.gen_bool(0.5);
 
@@ -413,8 +455,6 @@ impl Screensaver {
         }
 
         state.pieces_remaining -= 1;
-
-        Ok(())
     }
 
     /// Display the current state.
@@ -425,17 +465,18 @@ impl Screensaver {
         let cfg = &self.cfg;
         let piece = &mut state.pipe_piece;
 
-        canv.move_to(piece.pos)?;
+        canv.move_to(piece.pos);
+
+        if let Some(color) = piece.color {
+            canv.set_fg_color(color)
+        }
 
         let piece_idx = PIECE_SETS_IDX_MAP[piece.prev_dir as usize][piece.dir as usize];
 
         if let Some(pieces) = &cfg.custom_piece_set {
-            canv.put_str(&pieces[piece_idx])?;
+            canv.put_str(&pieces[piece_idx]);
         } else {
-            canv.put_str(format!(
-                "{}",
-                DEFAULT_PIECE_SETS[cfg.piece_set as usize][piece_idx]
-            ))?;
+            canv.put_str(DEFAULT_PIECE_SETS[cfg.piece_set as usize][piece_idx].to_string());
         }
 
         state.drawn_pieces += 1;
@@ -444,13 +485,15 @@ impl Screensaver {
             state.drawn_pieces = 0;
             state.pieces_remaining = 0;
 
-            canv.clear()?;
+            canv.clear();
         }
+
+        canv.render()?;
 
         Ok(())
     }
 
-    /// Run a main loop in the current thread until an external event is received (a key press or
+    /// Run the main loop in the current thread until an external event is received (a key press or
     /// signal) or some internal error is occurred.
     fn run(&mut self) -> Result<()> {
         let delay = Duration::from_millis(1000 / self.cfg.fps as u64);
@@ -461,30 +504,39 @@ impl Screensaver {
         while !quit {
             // Handle incoming events.
             //
-            // The poll function blocks the thread if the argument is nonzero, so we can use it
+            // The poll_input function blocks the thread if the argument is nonzero, so we can use it
             // for a frame rate limit. The only downside is that if the incoming events are
             // received (e.g., a key press or window resize), this function immediately returns,
             // so the delay isn't always the same. But since the user isn't expected to make
             // thousands of key presses or crazily drag the corner of the window while using
             // screensaver, we can ignore this.
-            if poll(delay).wrap_err("cannot poll events")? {
-                match read().wrap_err("cannot read received external event")? {
-                    Event::Key(event) => match event.code {
-                        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => quit = true,
+            if let Some(event) = self
+                .canv
+                .terminal()
+                .terminal()
+                .poll_input(Some(delay))
+                .wrap_err("cannot read incoming events")?
+            {
+                match event {
+                    InputEvent::Key(KeyEvent {
+                        key,
+                        modifiers: Modifiers::NONE,
+                    }) => match key {
+                        KeyCode::Escape | KeyCode::Char('q') | KeyCode::Char('Q') => quit = true,
                         KeyCode::Char(' ') => pause = !pause,
-                        KeyCode::Char('c') => self.canv.clear()?,
-                        _ => (),
+                        KeyCode::Char('c') => self.canv.clear(),
+                        _ => {}
                     },
-                    Event::Resize(w, h) => {
-                        self.canv.size = (w, h);
-                        self.canv.clear()?;
+                    InputEvent::Resized { cols, rows } => {
+                        self.canv.size = (cols, rows);
+                        self.canv.clear();
                     }
-                    _ => (),
+                    _ => {}
                 }
             }
 
             if !pause {
-                self.update()?;
+                self.update();
                 self.draw()?;
             }
         }
@@ -498,7 +550,8 @@ fn set_panic_hook() {
     let old_hook = take_hook();
 
     set_hook(Box::new(move |panic_info| {
-        let mut c = Canvas::new(io::stdout(), (0, 0));
+        let term = SystemTerminal::new_from_stdio(Capabilities::new_from_env().unwrap()).unwrap();
+        let mut c = Canvas::new(term).unwrap();
         let _ = c.deinit();
 
         old_hook(panic_info);
@@ -523,15 +576,18 @@ fn parse_cli() -> Config {
 fn main() -> Result<()> {
     let cfg = parse_cli();
 
-    let mut canv = Canvas::new(
-        io::stdout(),
-        term::size().wrap_err("failed to query the size of the terminal")?,
-    );
+    let term = SystemTerminal::new_from_stdio(
+        Capabilities::new_from_env().wrap_err("cannot read terminal capabilities")?,
+    )
+    .wrap_err("failed to associate terminal with screen buffer")?;
+    let mut canv = Canvas::new(term).wrap_err("failed to create canvas")?;
 
     set_panic_hook();
 
     canv.init()
         .wrap_err("failed to prepare terminal for drawing")?;
+
+    eprintln!("{} {}", canv.size.0, canv.size.1);
 
     let mut app = Screensaver::new(canv, cfg);
     let r = app.run();
