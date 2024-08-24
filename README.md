@@ -24,6 +24,7 @@ support alternate screen, see [Installation](#installation)).
   <img src="screenshots/screenshot_2.png" alt="Second screenshot with bold pipes" width="500">
   <img src="screenshots/screenshot_3.png" alt="Third screenshot with depth-mode" width="500">
   <img src="screenshots/screenshot_4.png" alt="Fourth screenshot with enabled gradient mode" width="500">
+  <img src="screenshots/screenshot_5.png" alt="Fifth screenshot with stats widget" width="500">
 </p>
 
 ## Installation
