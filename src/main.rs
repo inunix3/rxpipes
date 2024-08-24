@@ -4,6 +4,7 @@
 
 use clap::{Parser, ValueEnum};
 use eyre::{Result, WrapErr};
+use hex_color::HexColor;
 use rand::{
     distributions::{Distribution, Standard},
     thread_rng, Rng,
@@ -211,13 +212,13 @@ impl TerminalScreen {
         self.term.resize(size.0, size.1);
     }
 
-    /// Copy canvas buffer to terminal screen buffer.
+    /// Copy canvas buffer to the terminal screen buffer.
     fn copy_canvas(&mut self, canv: &Canvas) {
         self.term
             .draw_from_screen(&canv.surface, canv.pos.x as usize, canv.pos.y as usize);
     }
 
-    /// Renders all changes since last render.
+    /// Renders all changes since the last render.
     fn render(&mut self) -> Result<()> {
         self.term.flush()?;
 
@@ -323,6 +324,49 @@ impl Canvas {
         self.surface
             .add_change(Change::Text(String::from(s.as_ref())));
     }
+
+    /// Makes all characters darker upto the minimal color.
+    fn darken(&mut self, factor: f32, min: SrgbaTuple) {
+        let mut changes: Vec<Change> = vec![];
+
+        for (i, l) in self.surface.screen_cells().iter().enumerate() {
+            for (j, cell) in l.iter().enumerate() {
+                if cell.str().trim_ascii().is_empty() {
+                    continue;
+                }
+
+                let attrs = cell.attrs();
+                let mut fg = attrs.foreground();
+
+                fg = match fg {
+                    ColorAttribute::TrueColorWithDefaultFallback(mut srgba) => {
+                        srgba.0 *= factor;
+                        srgba.0 = srgba.0.clamp(min.0, 1.0);
+                        srgba.1 *= factor;
+                        srgba.1 = srgba.1.clamp(min.1, 1.0);
+                        srgba.2 *= factor;
+                        srgba.2 = srgba.2.clamp(min.2, 1.0);
+
+                        ColorAttribute::TrueColorWithDefaultFallback(srgba)
+                    }
+                    _ => fg,
+                };
+
+                // In order to apply the foreground change, we need so print something.
+                let text = cell.str().to_string();
+
+                changes.push(Change::CursorPosition {
+                    x: Position::Absolute(j),
+                    y: Position::Absolute(i),
+                });
+
+                changes.push(Change::Attribute(AttributeChange::Foreground(fg)));
+                changes.push(Change::Text(text));
+            }
+        }
+
+        self.surface.add_changes(changes);
+    }
 }
 
 #[derive(Copy, Clone, Eq, Default, PartialEq, Debug, ValueEnum)]
@@ -348,16 +392,16 @@ struct Config {
     /// Maximum drawn pieces of pipes on the screen.
     /// When this maximum is reached, the screen will be cleared.
     /// Set it to 0 to remove the limit.
-    #[arg(short, long, default_value_t = 1000, verbatim_doc_comment)]
-    max_drawn_pieces: u32,
+    #[arg(short, long, default_value_t = 10000, verbatim_doc_comment)]
+    max_drawn_pieces: u64,
     /// Maximum length of pipe in pieces.
     /// Must not equal to or be less than --min-pipe-length.
     #[arg(long, default_value_t = 300, verbatim_doc_comment)]
-    max_pipe_length: u32,
+    max_pipe_length: u64,
     /// Minimal length of pipe in pieces.
     /// Must not equal to or be greater than --max-pipe-length.
     #[arg(long, default_value_t = 7, verbatim_doc_comment)]
-    min_pipe_length: u32,
+    min_pipe_length: u64,
     /// Probability of turning a pipe as a percentage in a decimal form.
     #[arg(short = 't', long, default_value_t = 0.2)]
     turning_prob: f64,
@@ -366,6 +410,20 @@ struct Config {
     /// The RGB option is for terminals with true color support (all 16 million colors).
     #[arg(short, long, default_value_t, value_enum, verbatim_doc_comment)]
     palette: ColorPalette,
+    /// In this mode multiple layers of pipes are drawn. If the number of currently drawn pieces in
+    /// layer is >= layer_max_drawn_pieces, all pipe pieces are made darker and a new layer is created
+    /// on top of them. See also darken_factor and darken_min.
+    #[arg(short, long)]
+    depth_mode: bool,
+    /// Depth-mode: maximum drawn pipe pieces in the current layer.
+    #[arg(long, default_value_t = 1000)]
+    layer_max_drawn_pieces: u64,
+    /// Depth-mode: how much to darken pipe pieces in previous layers?
+    #[arg(short = 'F', long, default_value_t = 0.8)]
+    darken_factor: f32,
+    /// Depth-mode: the color to gradually darken to.
+    #[arg(short = 't', long, default_value = "#000000")]
+    darken_min: String,
     /// A default set of pieces to use.
     /// Available piece sets:
     /// 0 - ASCII pipes:
@@ -392,7 +450,7 @@ struct Config {
     #[arg(name = "custom-piece-set", short = 'c', long, verbatim_doc_comment)]
     custom_piece_set_: Option<String>,
     /// Show statistics in the bottom of screen (how many pieces drawn, pipes drawn, etc.)
-    #[arg(short = 's', long, verbatim_doc_comment)]
+    #[arg(short = 's', long)]
     show_stats: bool,
 
     // TODO: implement validation of length for custom-piece-set.
@@ -407,12 +465,16 @@ struct State {
     pipe_piece: PipePiece,
     /// Total of all drawn pieces.
     pieces_total: u64,
+    /// Total of all drawn pieces in the current layer.
+    layer_pieces_total: u64,
     /// Number of currently drawn pieces.
-    currently_drawn_pieces: u32,
+    currently_drawn_pieces: u64,
     /// Number of pieces not drawn yet.
-    pieces_remaining: u32,
+    pieces_remaining: u64,
     /// Total of all drawn pipes.
     pipes_total: u64,
+    /// Total of all drawn layers since last screen clear.
+    layers_drawn: u64,
     /// Indicates when to end the main loop.
     quit: bool,
     /// Indicates when to stop updating the state.
@@ -424,9 +486,11 @@ impl Default for State {
         Self {
             pipe_piece: PipePiece::new(),
             pieces_total: 0,
+            layer_pieces_total: 0,
             currently_drawn_pieces: 0,
             pieces_remaining: 0,
             pipes_total: 0,
+            layers_drawn: 0,
             quit: false,
             pause: false,
         }
@@ -445,19 +509,30 @@ struct Screensaver {
     state: State,
     term_scr: TerminalScreen,
     canv: Canvas,
+    darken_min: SrgbaTuple,
     stats_canv: Canvas,
     cfg: Config,
 }
 
 impl Screensaver {
     /// Create a `Screensaver`.
-    fn new(term_scr: TerminalScreen, cfg: Config) -> Self {
+    fn new(term_scr: TerminalScreen, cfg: Config) -> Result<Self> {
         let scr_size = term_scr.size;
 
-        Self {
+        Ok(Self {
             state: State::new(),
             term_scr,
             canv: Canvas::new(Point { x: 0, y: 0 }, scr_size),
+            darken_min: {
+                let hc = HexColor::parse_rgb(&cfg.darken_min)?;
+
+                SrgbaTuple(
+                    hc.r as f32 / 255.0,
+                    hc.g as f32 / 255.0,
+                    hc.b as f32 / 255.0,
+                    1.0,
+                )
+            },
             stats_canv: Canvas::new(
                 Point {
                     x: 0,
@@ -466,7 +541,7 @@ impl Screensaver {
                 (scr_size.0, 3),
             ),
             cfg,
-        }
+        })
     }
 
     /// Free all resources.
@@ -474,8 +549,8 @@ impl Screensaver {
         self.term_scr.deinit()
     }
 
-    /// Process a new frame.
-    fn update(&mut self) {
+    /// Generate the next pipe pieces.
+    fn gen_next_piece(&mut self) {
         // Aliases with shorter names
         let state = &mut self.state;
         let canv = &mut self.canv;
@@ -528,7 +603,7 @@ impl Screensaver {
     }
 
     /// Display the current state.
-    fn draw_pipe(&mut self) {
+    fn draw_pipe_piece(&mut self) {
         // Aliases with shorter names
         let state = &mut self.state;
         let canv = &mut self.canv;
@@ -550,15 +625,49 @@ impl Screensaver {
         }
 
         state.pieces_total += 1;
+        state.layer_pieces_total += 1;
         state.currently_drawn_pieces += 1;
         state.pieces_remaining -= 1;
 
-        if state.currently_drawn_pieces == cfg.max_drawn_pieces {
-            state.currently_drawn_pieces = 0;
-            state.pieces_remaining = 0;
-
-            canv.clear();
+        if state.pieces_total >= cfg.max_drawn_pieces {
+            self.clear();
+        } else if state.layer_pieces_total >= cfg.layer_max_drawn_pieces {
+            self.darken_previous_layers();
         }
+    }
+
+    /// Clear the screen and reset all pipe/piece/layer counters.
+    fn clear(&mut self) {
+        self.state.currently_drawn_pieces = 0;
+        self.state.pieces_remaining = 0;
+        self.state.layer_pieces_total = 0;
+        self.state.pieces_total = 0;
+        self.state.layers_drawn = 0;
+
+        self.canv.clear();
+    }
+
+    /// Make all pipe pieces in previous layers darker.
+    fn darken_previous_layers(&mut self) {
+        self.state.currently_drawn_pieces = 0;
+        self.state.pieces_remaining = 0;
+        self.state.layer_pieces_total = 0;
+        self.state.layers_drawn += 1;
+
+        self.canv.darken(self.cfg.darken_factor, self.darken_min);
+    }
+
+    /// Render pipes and maybe stats.
+    fn render(&mut self) -> Result<()> {
+        self.term_scr.copy_canvas(&self.canv);
+
+        if self.cfg.show_stats {
+            self.term_scr.copy_canvas(&self.stats_canv);
+        }
+
+        self.term_scr.render()?;
+
+        Ok(())
     }
 
     /// Run the main loop in the current thread until an external event is received (a key press or
@@ -570,20 +679,14 @@ impl Screensaver {
             self.handle_events(delay)?;
 
             if !self.state.pause {
-                self.update();
-                self.draw_pipe();
+                self.gen_next_piece();
+                self.draw_pipe_piece();
 
                 if self.cfg.show_stats {
                     self.draw_stats();
                 }
 
-                self.term_scr.copy_canvas(&self.canv);
-
-                if self.cfg.show_stats {
-                    self.term_scr.copy_canvas(&self.stats_canv);
-                }
-
-                self.term_scr.render()?;
+                self.render()?;
             }
         }
 
@@ -614,7 +717,7 @@ impl Screensaver {
                         self.state.quit = true
                     }
                     KeyCode::Char(' ') => self.state.pause = !self.state.pause,
-                    KeyCode::Char('c') => self.canv.clear(),
+                    KeyCode::Char('c') => self.clear(),
                     KeyCode::Char('s') => self.cfg.show_stats = !self.cfg.show_stats,
                     _ => {}
                 },
@@ -624,6 +727,7 @@ impl Screensaver {
                 }) => self.state.quit = true,
                 InputEvent::Resized { cols, rows } => {
                     self.canv.resize((cols, rows));
+
                     self.stats_canv.resize((cols, self.stats_canv.size.1));
                     self.term_scr.resize((cols, rows));
                 }
@@ -634,6 +738,7 @@ impl Screensaver {
         Ok(())
     }
 
+    /// Draw a stats widget which shows pipe/piece/layers counters and the current pipe color.
     fn draw_stats(&mut self) {
         self.stats_canv.clear();
 
@@ -677,11 +782,13 @@ impl Screensaver {
             });
 
         let s = format!(
-            "pcs. drawn: {}, c. pcs. drawn: {}, pps. drawn: {}, pcs. rem: {}, pps. len: {}, pipe color: {}",
+            "pcs. drawn: {}, lpcs. drawn: {}, c. pcs. drawn: {}, pps. drawn: {}, pcs. rem: {}, l. drawn: {}, pps. len: {}, pipe color: {}",
             self.state.pieces_total,
+            self.state.layer_pieces_total,
             self.state.currently_drawn_pieces,
             self.state.pipes_total,
             self.state.pieces_remaining,
+            self.state.layers_drawn,
             pipe_len,
             color
         );
@@ -734,7 +841,7 @@ fn main() -> Result<()> {
         .init()
         .wrap_err("failed to prepare terminal for drawing")?;
 
-    let mut app = Screensaver::new(term_scr, cfg);
+    let mut app = Screensaver::new(term_scr, cfg)?;
     let r = app.run();
 
     app.deinit()

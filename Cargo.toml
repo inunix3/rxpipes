@@ -14,7 +14,9 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
+compact_str = "0.8.0"
 eyre = "0.6.12"
+hex_color = "3.0.0"
 rand = "0.8.5"
 termwiz = "0.22.0"
 unicode-segmentation = "1.11.0"

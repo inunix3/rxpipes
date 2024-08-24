@@ -4,6 +4,8 @@ This program is a 2D screensaver which recreates the Pipes screensaver from old 
 ## Features
 - 6 available piece sets (see the [Piece Sets](#piece-sets) section to see them).
 - Custom piece sets are supported.
+- **Depth mode** - in this mode several layers of pipes are drawn, and when a new layer is created,
+old pipes are made darker which gives a sense of depth.
 - Each pipe has its own color; available palettes are: none (colorless), base colors (16 colors
 defined by your terminal) and RGB.
 - Changeable FPS (frames per second).
@@ -19,6 +21,8 @@ support alternate screen, see [Installation](#installation)).
 <p align="center">
   <img src="screenshots/screenshot_1.png" alt="First screenshot with doubled pipes" width="500">
   <img src="screenshots/screenshot_2.png" alt="Second screenshot with bold pipes" width="500">
+  <img src="screenshots/screenshot_3.png" alt="Third screenshot with depth-mode" width="500">
+  ^ Depth-mode
 </p>
 
 ## Installation
