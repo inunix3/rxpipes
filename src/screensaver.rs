@@ -329,6 +329,10 @@ impl Screensaver {
                     }
                     KeyCode::Char(' ') => self.state.pause = !self.state.pause,
                     KeyCode::Char('c') => self.clear(),
+                    KeyCode::Char('l') => {
+                        self.term_scr.clear();
+                        self.render()?
+                    }
                     KeyCode::Char('s') => self.cfg.show_stats = !self.cfg.show_stats,
                     _ => {}
                 },

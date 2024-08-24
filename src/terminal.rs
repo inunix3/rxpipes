@@ -5,6 +5,7 @@
 use crate::canvas::Canvas;
 use eyre::{Result, WrapErr};
 use termwiz::{
+    color::ColorAttribute,
     surface::{Change, CursorVisibility},
     terminal::{buffered::BufferedTerminal, SystemTerminal, Terminal},
 };
@@ -56,6 +57,12 @@ impl TerminalScreen {
         self.leave_alternate_screen()?;
 
         Ok(())
+    }
+
+    /// Clear the screen.
+    pub fn clear(&mut self) {
+        self.term
+            .add_change(Change::ClearScreen(ColorAttribute::Default));
     }
 
     /// Resize terminal screen buffer to specified size.
