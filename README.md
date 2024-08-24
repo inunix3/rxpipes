@@ -9,6 +9,7 @@ old pipes are made darker which gives a sense of depth.
 - Each pipe has its own color; available palettes are: none (colorless), base colors (16 colors
 defined by your terminal) and RGB.
 - There is a gradient mode for use with RGB palette.
+- Stats widget - decoration that shows various pipe/piece/layer counters and the current pipe color.
 - Changeable FPS (frames per second).
 - The minimal and maximal length of pipes can be specified.
 - The maximal number of drawn characters can be also specified. To ignore this setting specify 0
