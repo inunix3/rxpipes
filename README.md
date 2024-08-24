@@ -23,8 +23,11 @@ support alternate screen, see [Installation](#installation)).
   <img src="screenshots/screenshot_1.png" alt="First screenshot with doubled pipes" width="500">
   <img src="screenshots/screenshot_2.png" alt="Second screenshot with bold pipes" width="500">
   <img src="screenshots/screenshot_3.png" alt="Third screenshot with depth-mode" width="500">
-  ^ Depth-mode
-  <img src="screenshots/screenshot_3.png" alt="Fourth screenshot with enabled gradient mode" width="500">
+
+  ^ depth-mode
+
+  <img src="screenshots/screenshot_4.png" alt="Fourth screenshot with enabled gradient mode" width="500">
+
   ^ Gradient
 </p>
 
@@ -43,11 +46,13 @@ default cargo dir will be) is in the `PATH` environment variable.
 To see all available options, pass `-h` or `--help`.
 
 ## Controls
-| Key                  | Action       |
-|----------------------|--------------|
-| `q` / `Q` / `Escape` | Quit         |
-| `Space`              | Pause        |
-| `c`                  | Clear screen |
+| Key                  | Action                      |
+|----------------------|-----------------------------|
+| `q` / `Q` / `Escape` | Quit                        |
+| `Space`              | Pause                       |
+| `c`                  | Clear screen                |
+| `s`                  | Show stats widget           |
+| `l`                  | Clear and redraw everything |
 
 ## Piece Sets
 
