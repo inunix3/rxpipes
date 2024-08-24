@@ -254,6 +254,7 @@ impl Screensaver {
         self.state.layer_pieces_total = 0;
         self.state.pieces_total = 0;
         self.state.layers_drawn = 0;
+        self.state.pipes_total = 0;
 
         self.canv.clear();
     }
