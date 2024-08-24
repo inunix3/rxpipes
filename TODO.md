@@ -5,4 +5,4 @@
 - [x] Quit on Ctrl-C.
 - [x] Add stats (widget in corner with numbre of pipe pieces drawn, remaining pieces, etc.).
 - [x] Add depth-mode.
-- [ ] Add gradient option in addition to color palette.
+- [x] Add gradient option in addition to color palette.

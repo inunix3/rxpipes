@@ -8,6 +8,7 @@ This program is a 2D screensaver which recreates the Pipes screensaver from old 
 old pipes are made darker which gives a sense of depth.
 - Each pipe has its own color; available palettes are: none (colorless), base colors (16 colors
 defined by your terminal) and RGB.
+- There is a gradient mode for use with RGB palette.
 - Changeable FPS (frames per second).
 - The minimal and maximal length of pipes can be specified.
 - The maximal number of drawn characters can be also specified. To ignore this setting specify 0
@@ -23,6 +24,8 @@ support alternate screen, see [Installation](#installation)).
   <img src="screenshots/screenshot_2.png" alt="Second screenshot with bold pipes" width="500">
   <img src="screenshots/screenshot_3.png" alt="Third screenshot with depth-mode" width="500">
   ^ Depth-mode
+  <img src="screenshots/screenshot_3.png" alt="Fourth screenshot with enabled gradient mode" width="500">
+  ^ Gradient
 </p>
 
 ## Installation

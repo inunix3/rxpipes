@@ -108,6 +108,22 @@ impl Point {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
+enum GradientDir {
+    #[default]
+    Up,
+    Down,
+}
+
+impl Distribution<GradientDir> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> GradientDir {
+        match rng.gen_range(0..=3) {
+            0 => GradientDir::Up,
+            _ => GradientDir::Down,
+        }
+    }
+}
+
 /// Represents a piece of pipe.
 #[derive(Copy, Clone, Default, Debug)]
 struct PipePiece {
@@ -119,6 +135,8 @@ struct PipePiece {
     dir: Direction,
     /// Color of the piece.
     color: Option<ColorAttribute>,
+    /// Gradient direction.
+    gradient: GradientDir,
 }
 
 impl PipePiece {
@@ -137,6 +155,7 @@ impl PipePiece {
             prev_dir: initial_dir,
             dir: initial_dir,
             color: gen_color(palette),
+            gradient: rng.gen(),
         }
     }
 }
@@ -410,10 +429,16 @@ struct Config {
     /// The RGB option is for terminals with true color support (all 16 million colors).
     #[arg(short, long, default_value_t, value_enum, verbatim_doc_comment)]
     palette: ColorPalette,
+    /// Enable gradient. Use only with RGB palette.
+    #[arg(short, long)]
+    gradient: bool,
+    /// Gradient: the step to lighten/darken the color.
+    #[arg(long, default_value_t = 0.005)]
+    gradient_step: f32,
     /// In this mode multiple layers of pipes are drawn. If the number of currently drawn pieces in
     /// layer is >= layer_max_drawn_pieces, all pipe pieces are made darker and a new layer is created
-    /// on top of them. See also darken_factor and darken_min.
-    #[arg(short, long)]
+    /// on top of them. See also darken_factor and darken_min. RGB palette only!
+    #[arg(short, long, verbatim_doc_comment)]
     depth_mode: bool,
     /// Depth-mode: maximum drawn pipe pieces in the current layer.
     #[arg(long, default_value_t = 1000)]
@@ -613,6 +638,28 @@ impl Screensaver {
         canv.move_to(piece.pos);
 
         if let Some(color) = piece.color {
+            let color = if cfg.gradient {
+                let step = match piece.gradient {
+                    GradientDir::Up => cfg.gradient_step,
+                    GradientDir::Down => -cfg.gradient_step,
+                };
+
+                let srgba = if let ColorAttribute::TrueColorWithDefaultFallback(srgba) = color {
+                    let r = (srgba.0 + step).clamp(0.0, 1.0);
+                    let g = (srgba.1 + step).clamp(0.0, 1.0);
+                    let b = (srgba.2 + step).clamp(0.0, 1.0);
+
+                    SrgbaTuple(r, g, b, 1.0)
+                } else {
+                    unreachable!()
+                };
+
+                ColorAttribute::TrueColorWithDefaultFallback(srgba)
+            } else {
+                color
+            };
+
+            piece.color = Some(color);
             canv.set_fg_color(color)
         }
 
@@ -631,7 +678,7 @@ impl Screensaver {
 
         if state.pieces_total >= cfg.max_drawn_pieces {
             self.clear();
-        } else if state.layer_pieces_total >= cfg.layer_max_drawn_pieces {
+        } else if cfg.depth_mode && state.layer_pieces_total >= cfg.layer_max_drawn_pieces {
             self.darken_previous_layers();
         }
     }
