@@ -56,7 +56,7 @@ pub struct Config {
     #[arg(short = 'F', long, default_value_t = 0.8)]
     pub darken_factor: f32,
     /// Depth-mode: the color to gradually darken to.
-    #[arg(short = 't', long, default_value = "#000000")]
+    #[arg(short = 'M', long, default_value = "#000000")]
     pub darken_min: String,
     /// A default set of pieces to use.
     /// Available piece sets:
