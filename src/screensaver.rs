@@ -329,10 +329,7 @@ impl Screensaver {
                     }
                     KeyCode::Char(' ') => self.state.pause = !self.state.pause,
                     KeyCode::Char('c') => self.clear(),
-                    KeyCode::Char('l') => {
-                        self.term_scr.clear();
-                        self.render()?
-                    }
+                    KeyCode::Char('l') => self.redraw()?,
                     KeyCode::Char('s') => self.cfg.show_stats = !self.cfg.show_stats,
                     _ => {}
                 },
@@ -343,12 +340,23 @@ impl Screensaver {
                 InputEvent::Resized { cols, rows } => {
                     self.canv.resize((cols, rows));
 
+                    // self.stats_canv.resize((cols, self.stats_canv.size().1));
+                    self.stats_canv.pos.y = rows as isize - 1;
                     self.stats_canv.resize((cols, self.stats_canv.size().1));
                     self.term_scr.resize((cols, rows));
+
+                    self.redraw()?
                 }
                 _ => {}
             }
         }
+
+        Ok(())
+    }
+
+    fn redraw(&mut self) -> Result<()> {
+        self.term_scr.clear();
+        self.render()?;
 
         Ok(())
     }
