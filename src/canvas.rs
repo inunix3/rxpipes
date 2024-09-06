@@ -70,8 +70,9 @@ impl Canvas {
             .add_change(Change::Text(String::from(s.as_ref())));
     }
 
-    /// Makes all characters darker upto the minimal color.
-    pub fn darken(&mut self, factor: f32, min: SrgbaTuple) {
+    /// Makes all characters darker upto the minimal color. If the minimal color is lighter than
+    /// character's color, the character will be lighten instead.
+    pub fn darken(&mut self, amount: f32, min: SrgbaTuple) {
         let mut changes: Vec<Change> = vec![];
 
         for (i, l) in self.surface.screen_cells().iter().enumerate() {
@@ -83,16 +84,27 @@ impl Canvas {
                 let attrs = cell.attrs();
                 let mut fg = attrs.foreground();
 
-                fg = match fg {
-                    ColorAttribute::TrueColorWithDefaultFallback(mut srgba) => {
-                        srgba.0 *= factor;
-                        srgba.0 = srgba.0.clamp(min.0, 1.0);
-                        srgba.1 *= factor;
-                        srgba.1 = srgba.1.clamp(min.1, 1.0);
-                        srgba.2 *= factor;
-                        srgba.2 = srgba.2.clamp(min.2, 1.0);
+                let approach = |x: f32, a: f32, amount: f32| -> f32 {
+                    let mut x = x;
 
-                        ColorAttribute::TrueColorWithDefaultFallback(srgba)
+                    if x > a {
+                        x *= amount;
+                        x = x.clamp(a, 1.0);
+                    } else if x < a {
+                        x *= 1.0 + amount;
+                        x = x.clamp(0.0, a);
+                    }
+
+                    x
+                };
+
+                fg = match fg {
+                    ColorAttribute::TrueColorWithDefaultFallback(mut cell_color) => {
+                        cell_color.0 = approach(cell_color.0, min.0, amount);
+                        cell_color.1 = approach(cell_color.1, min.1, amount);
+                        cell_color.2 = approach(cell_color.2, min.2, amount);
+
+                        ColorAttribute::TrueColorWithDefaultFallback(cell_color)
                     }
                     _ => fg,
                 };

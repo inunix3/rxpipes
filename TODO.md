@@ -1,7 +1,7 @@
 ## Release v1.3.0
 
 - [x] Add background color setting.
-- [ ] Lighten rather than darken if the pipe color is < background color.
+- [x] Lighten rather than darken if the pipe color is < background color.
 - [ ] Add keybinding for changing speed.
 
 ## Release v1.2.0
