@@ -97,6 +97,7 @@ pub struct Screensaver {
     term_scr: TerminalScreen,
     canv: Canvas,
     darken_min: SrgbaTuple,
+    bg_color: SrgbaTuple,
     stats_canv: Canvas,
     cfg: Config,
 }
@@ -106,7 +107,7 @@ impl Screensaver {
     pub fn new(term_scr: TerminalScreen, cfg: Config) -> Result<Self> {
         let scr_size = term_scr.size();
 
-        Ok(Self {
+        let mut s = Ok(Self {
             state: State::new(),
             term_scr,
             canv: Canvas::new(Point { x: 0, y: 0 }, scr_size),
@@ -120,6 +121,16 @@ impl Screensaver {
                     1.0,
                 )
             },
+            bg_color: {
+                let hc = HexColor::parse_rgb(&cfg.bg_color)?;
+
+                SrgbaTuple(
+                    hc.r as f32 / 255.0,
+                    hc.g as f32 / 255.0,
+                    hc.b as f32 / 255.0,
+                    hc.a as f32 / 255.0,
+                )
+            },
             stats_canv: Canvas::new(
                 Point {
                     x: 0,
@@ -128,7 +139,13 @@ impl Screensaver {
                 (scr_size.0, 3),
             ),
             cfg,
-        })
+        });
+
+        if let Ok(ref mut s) = s {
+            s.canv
+                .fill(ColorAttribute::TrueColorWithDefaultFallback(s.bg_color));
+        }
+        s
     }
 
     /// Free all resources.
@@ -256,7 +273,8 @@ impl Screensaver {
         self.state.layers_drawn = 0;
         self.state.pipes_total = 0;
 
-        self.canv.clear();
+        self.canv
+            .fill(ColorAttribute::TrueColorWithDefaultFallback(self.bg_color));
     }
 
     /// Make all pipe pieces in previous layers darker.
@@ -340,6 +358,8 @@ impl Screensaver {
                 }) => self.state.quit = true,
                 InputEvent::Resized { cols, rows } => {
                     self.canv.resize((cols, rows));
+                    self.canv
+                        .fill(ColorAttribute::TrueColorWithDefaultFallback(self.bg_color));
 
                     // self.stats_canv.resize((cols, self.stats_canv.size().1));
                     self.stats_canv.pos.y = rows as isize - 1;
@@ -364,11 +384,8 @@ impl Screensaver {
 
     /// Draw a stats widget which shows pipe/piece/layers counters and the current pipe color.
     fn draw_stats(&mut self) {
-        self.stats_canv.clear();
-
         // Stats string will have a black background
-        self.stats_canv
-            .set_bg_color(ColorAttribute::PaletteIndex(0));
+        self.stats_canv.fill(ColorAttribute::PaletteIndex(0));
         // Stats string will have a gray foreground
         self.stats_canv
             .set_fg_color(ColorAttribute::PaletteIndex(7));
@@ -418,6 +435,5 @@ impl Screensaver {
         );
 
         self.stats_canv.put_str(s);
-        self.stats_canv.set_bg_color(ColorAttribute::Default);
     }
 }

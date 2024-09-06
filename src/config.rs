@@ -58,6 +58,8 @@ pub struct Config {
     /// Depth-mode: the color to gradually darken to.
     #[arg(short = 'M', long, default_value = "#000000")]
     pub darken_min: String,
+    #[arg(short = 'b', long, default_value = "#000000")]
+    pub bg_color: String,
     /// A default set of pieces to use.
     /// Available piece sets:
     /// 0 - ASCII pipes:

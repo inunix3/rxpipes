@@ -39,6 +39,11 @@ impl Canvas {
             .add_change(Change::ClearScreen(ColorAttribute::Default));
     }
 
+    /// Fill the canvas with specified color.
+    pub fn fill(&mut self, c: ColorAttribute) {
+        self.surface.add_change(Change::ClearScreen(c));
+    }
+
     /// Move the cursor to the 2D point.
     pub fn move_to(&mut self, p: Point) {
         self.surface.add_change(Change::CursorPosition {
