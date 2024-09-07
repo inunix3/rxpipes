@@ -97,7 +97,7 @@ pub struct Screensaver {
     term_scr: TerminalScreen,
     canv: Canvas,
     darken_min: SrgbaTuple,
-    bg_color: SrgbaTuple,
+    bg_color: Option<SrgbaTuple>,
     stats_canv: Canvas,
     cfg: Config,
 }
@@ -122,14 +122,18 @@ impl Screensaver {
                 )
             },
             bg_color: {
-                let hc = HexColor::parse_rgb(&cfg.bg_color)?;
+                if let Some(c) = &cfg.bg_color {
+                    let hc = HexColor::parse_rgb(&c)?;
 
-                SrgbaTuple(
-                    hc.r as f32 / 255.0,
-                    hc.g as f32 / 255.0,
-                    hc.b as f32 / 255.0,
-                    hc.a as f32 / 255.0,
-                )
+                    Some(SrgbaTuple(
+                        hc.r as f32 / 255.0,
+                        hc.g as f32 / 255.0,
+                        hc.b as f32 / 255.0,
+                        hc.a as f32 / 255.0,
+                    ))
+                } else {
+                    None
+                }
             },
             stats_canv: Canvas::new(
                 Point {
@@ -142,8 +146,7 @@ impl Screensaver {
         });
 
         if let Ok(ref mut s) = s {
-            s.canv
-                .fill(ColorAttribute::TrueColorWithDefaultFallback(s.bg_color));
+            s.draw_bg();
         }
         s
     }
@@ -273,8 +276,16 @@ impl Screensaver {
         self.state.layers_drawn = 0;
         self.state.pipes_total = 0;
 
-        self.canv
-            .fill(ColorAttribute::TrueColorWithDefaultFallback(self.bg_color));
+        self.draw_bg();
+    }
+
+    fn draw_bg(&mut self) {
+        if let Some(c) = self.bg_color {
+            self.canv
+                .fill(ColorAttribute::TrueColorWithDefaultFallback(c));
+        } else {
+            self.canv.fill(ColorAttribute::Default);
+        }
     }
 
     /// Make all pipe pieces in previous layers darker.
@@ -358,8 +369,7 @@ impl Screensaver {
                 }) => self.state.quit = true,
                 InputEvent::Resized { cols, rows } => {
                     self.canv.resize((cols, rows));
-                    self.canv
-                        .fill(ColorAttribute::TrueColorWithDefaultFallback(self.bg_color));
+                    self.draw_bg();
 
                     // self.stats_canv.resize((cols, self.stats_canv.size().1));
                     self.stats_canv.pos.y = rows as isize - 1;
