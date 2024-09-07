@@ -6,6 +6,7 @@ This program is a 2D screensaver which recreates the Pipes screensaver from old 
 - Custom piece sets are supported.
 - **Depth mode** - in this mode several layers of pipes are drawn, and when a new layer is created,
 old pipes are made darker which gives a sense of depth. Usable only with RGB palette.
+- Background color setting (by default transparent).
 - Each pipe has its own color; available palettes are: none (colorless), base colors (16 colors
 defined by your terminal) and RGB.
 - There is a gradient mode for use with RGB palette.
@@ -43,13 +44,17 @@ default cargo dir will be) is in the `PATH` environment variable.
 To see all available options, pass `-h` or `--help`.
 
 ## Controls
-| Key                  | Action                      |
-|----------------------|-----------------------------|
-| `q` / `Q` / `Escape` | Quit                        |
-| `Space`              | Pause                       |
-| `c`                  | Clear screen                |
-| `s`                  | Show stats widget           |
-| `l`                  | Clear and redraw everything |
+| Key                             | Action                      |
+|---------------------------------|-----------------------------|
+| `q` / `Q` / `Escape` / `Ctrl-C` | Quit                        |
+| `Space`                         | Pause                       |
+| `c`                             | Clear screen                |
+| `s`                             | Show stats widget           |
+| `l`                             | Clear and redraw everything |
+| `,`                             | Change speed by -1          |
+| `.`                             | Change speed by +1          |
+| `<`                             | Change speed by -10         |
+| `>`                             | Change speed by +10         |
 
 ## Piece Sets
 

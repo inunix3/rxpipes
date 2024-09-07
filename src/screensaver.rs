@@ -99,6 +99,7 @@ pub struct Screensaver {
     darken_min: SrgbaTuple,
     bg_color: Option<SrgbaTuple>,
     stats_canv: Canvas,
+    delay: Duration,
     cfg: Config,
 }
 
@@ -123,7 +124,7 @@ impl Screensaver {
             },
             bg_color: {
                 if let Some(c) = &cfg.bg_color {
-                    let hc = HexColor::parse_rgb(&c)?;
+                    let hc = HexColor::parse_rgb(c)?;
 
                     Some(SrgbaTuple(
                         hc.r as f32 / 255.0,
@@ -142,6 +143,7 @@ impl Screensaver {
                 },
                 (scr_size.0, 3),
             ),
+            delay: Screensaver::calculate_delay(cfg.fps),
             cfg,
         });
 
@@ -279,6 +281,7 @@ impl Screensaver {
         self.draw_bg();
     }
 
+    /// Fill the screen with background color.
     fn draw_bg(&mut self) {
         if let Some(c) = self.bg_color {
             self.canv
@@ -314,10 +317,8 @@ impl Screensaver {
     /// Run the main loop in the current thread until an external event is received (a key press or
     /// signal) or some internal error is occurred.
     pub fn run(&mut self) -> Result<()> {
-        let delay = Duration::from_millis(1000 / self.cfg.fps as u64);
-
         while !self.state.quit {
-            self.handle_events(delay)?;
+            self.handle_events(self.delay)?;
 
             if !self.state.pause {
                 self.gen_next_piece();
@@ -332,6 +333,10 @@ impl Screensaver {
         }
 
         Ok(())
+    }
+
+    fn calculate_delay(fps: i64) -> Duration {
+        Duration::from_millis(1000 / fps as u64)
     }
 
     /// Handle input and incoming events.
@@ -361,6 +366,28 @@ impl Screensaver {
                     KeyCode::Char('c') => self.clear(),
                     KeyCode::Char('l') => self.redraw()?,
                     KeyCode::Char('s') => self.cfg.show_stats = !self.cfg.show_stats,
+                    KeyCode::Char(',') => {
+                        self.cfg.fps -= 1;
+                        self.cfg.fps = self.cfg.fps.clamp(1, i64::MAX);
+
+                        self.delay = Self::calculate_delay(self.cfg.fps)
+                    }
+                    KeyCode::Char('.') => {
+                        self.cfg.fps = self.cfg.fps.saturating_add(1);
+
+                        self.delay = Self::calculate_delay(self.cfg.fps)
+                    }
+                    KeyCode::Char('<') => {
+                        self.cfg.fps -= 10;
+                        self.cfg.fps = self.cfg.fps.clamp(1, i64::MAX);
+
+                        self.delay = Self::calculate_delay(self.cfg.fps)
+                    }
+                    KeyCode::Char('>') => {
+                        self.cfg.fps = self.cfg.fps.saturating_add(10);
+
+                        self.delay = Self::calculate_delay(self.cfg.fps)
+                    }
                     _ => {}
                 },
                 InputEvent::Key(KeyEvent {
@@ -433,7 +460,7 @@ impl Screensaver {
             });
 
         let s = format!(
-            "pcs. drawn: {}, lpcs. drawn: {}, c. pcs. drawn: {}, pps. drawn: {}, pcs. rem: {}, l. drawn: {}, pps. len: {}, pipe color: {}",
+            "pcs. drawn: {}, lpcs. drawn: {}, c. pcs. drawn: {}, pps. drawn: {}, pcs. rem: {}, l. drawn: {}, pps. len: {}, pipe color: {}, fps: {}",
             self.state.pieces_total,
             self.state.layer_pieces_total,
             self.state.currently_drawn_pieces,
@@ -441,7 +468,8 @@ impl Screensaver {
             self.state.pieces_remaining,
             self.state.layers_drawn,
             pipe_len,
-            color
+            color,
+            self.cfg.fps,
         );
 
         self.stats_canv.put_str(s);
