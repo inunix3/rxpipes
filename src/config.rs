@@ -10,7 +10,7 @@ use clap::Parser;
 #[command(
     about = "2D version of the ancient pipes screensaver for terminals.",
     author = "inunix3",
-    version = "1.2.0",
+    version = "1.3.0",
     long_about = None,
 )]
 pub struct Config {
