@@ -262,7 +262,7 @@ impl Screensaver {
         state.currently_drawn_pieces += 1;
         state.pieces_remaining -= 1;
 
-        if state.pieces_total >= cfg.max_drawn_pieces {
+        if cfg.max_drawn_pieces != 0 && state.pieces_total >= cfg.max_drawn_pieces {
             self.clear();
         } else if cfg.depth_mode && state.layer_pieces_total >= cfg.layer_max_drawn_pieces {
             self.darken_previous_layers();
